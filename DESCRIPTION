@@ -1,0 +1,29 @@
+Package: scalpelR
+Type: Package
+Title: Downstream Statistical Applications for SCALPEL Nextflow Execution
+Version: 0.1.0
+Author: Franz AKE (PLASS lab)
+Maintainer: Franz AKE <fake@idibell.cat>
+Description: Provides downstream statistical analyses for SCALPEL, 
+    including operations on iDGE-based Seurat objects. For more details, 
+    see the SCALPEL README file.
+Imports:
+    dplyr,
+    magrittr,
+    tidyr,
+    tibble,
+    reshape2,
+    stringr,
+    Seurat,
+    pbapply,
+    data.table,
+    ggplot2,
+    stats,
+    Gviz,
+    GenomicRanges
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
