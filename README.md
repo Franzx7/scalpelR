@@ -25,5 +25,5 @@ We welcome contributions to **scalpelR**. Feel free to submit issues, bug report
 ## Citation
 
 If you use **scalpelR** in your research, please cite it as follows:
-> Franz Ake et al (2024) Quantification of transcript isoforms at the single-cell level using SCALPEL. GitHub repository: https://github.com/p-CMRC-LAB/SCALPEL
+Ake, F., Schilling, M., Fernández-Moya, S.M. et al. Quantification of transcript isoforms at the single-cell level using SCALPEL. Nat Commun 16, 6402 (2025). https://doi.org/10.1038/s41467-025-61118-0
 
