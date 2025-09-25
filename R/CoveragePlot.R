@@ -1,149 +1,158 @@
-#' Coverage Plot for Gene and Transcript Regions using BAM files
+#' Plot Read Coverage and Gene/Transcript Structure from BAM Files
 #'
-#' This function generates a gene region track and corresponding read coverage plots
-#' from BAM files using the Gviz package.
+#' Generates a visualization of gene and transcript annotation alongside read coverage from one or more BAM files using the Gviz package.
 #'
-#' @param bamfiles A named vector of BAM file paths. Names will be used as labels.
-#' @param gtf A GRanges object containing the GTF annotation.
-#' @param gene_name The gene name of interest (must be in GTF).
-#' @param transcript_names A vector of transcript names to be plotted.
-#' @param extend.range Numeric value specifying the extension of the plotting region
-#'        beyond the gene's boundaries. Default is 0 (no extension).
-#' @param genome The genome build identifier (e.g., "mm10", "hg19"). Default is "mm10".
-#' @param zoom Logical. Should the plot zoom into a particular region? Default is FALSE.
-#' @param zoom_focus Numeric. Percentage of the gene region to focus on when zooming (default: 0.1).
-#' @return A Gviz plot displaying the gene and transcript annotations and coverage tracks from BAM files.
+#' @param genome_gr A GRanges object containing genome annotation (e.g., from GTF).
+#' @param bamfiles A named vector of BAM file paths. Names will be used as track labels.
+#' @param gene_in The gene name of interest (must be present in \code{genome_gr}).
+#' @param features Optional. A vector of transcript names to be displayed for the gene (\code{NULL} for all transcripts).
+#' @param genome_sp The genome build identifier, either \code{"mm10"} or \code{"hg38"}. Default is \code{"mm10"}.
+#' @param distZOOM Optional. Zoom to a subregion (numeric, in bp) from gene boundary. If \code{NULL}, plot the entire gene region.
+#' @param annot_tab Optional. Annotation table. Not used internally but reserved for future use.
+#' @param filter_trs Logical. Whether to filter transcripts. Default is \code{FALSE}.
+#' @param extend.left Numeric. Number of bases to extend to the left of the gene region. Default is 1000.
+#' @param extend.right Numeric. Number of bases to extend to the right of the gene region. Default is 1000.
+#' @param samtools.bin Character. Path to the \code{samtools} executable. Default is \code{"samtools"}.
+#'
+#' @details
+#' For each BAM file, coverage is computed over the gene region (optionally including selected transcripts and extensions)
+#' using \code{samtools view} and \code{samtools depth}. The gene region and transcript structure are shown using Gviz tracks.
+#' The function can zoom to either end of the gene, depending on strand and the \code{distZOOM} parameter.
+#'
+#' @return
+#' Invisibly returns the Gviz plot object (plot is drawn as a side effect).
+#'
 #' @examples
-#' CoveragePlot(bamfiles = c("sample1.bam", "sample2.bam"),
-#'              gtf = gtf_data,
-#'              gene_name = "GeneA",
-#'              transcript_names = c("Transcript1", "Transcript2"),
-#'              extend.range = 1000)
+#' \dontrun{
+#' CoveragePlot(
+#'   genome_gr = gtf_gr,
+#'   bamfiles = c(Sample1 = "sample1.bam", Sample2 = "sample2.bam"),
+#'   gene_in = "GeneA",
+#'   features = c("Transcript1", "Transcript2"),
+#'   genome_sp = "mm10",
+#'   extend.left = 2000,
+#'   extend.right = 2000
+#' )
+#' }
+#'
 #' @export
-CoveragePlot <- function(bamfiles,
-                         gtf,
-                         gene_name,
-                         transcript_names,
-                         extend.range = 0,
-                         genome = "mm10",
-                         zoom = FALSE,
-                         zoom_focus = 0.1) {
+CoveragePlot <- function(
+    genome_gr,
+    bamfiles,
+    gene_in,
+    features = NULL,
+    genome_sp = "mm10",
+    distZOOM = NULL,
+    filter_trs = F,
+    extend.left = 1000,
+    extend.right = 1000,
+    samtools.bin = "samtools") {
+  # Function to plot read coverage on genome
 
-    options(ucscChromosomeNames=FALSE)
+  # checks
+  if (!genome_sp %in% c("mm10", "hg38")) {
+    stop("! Enter genome species: mm10 or hg38")
+  }
 
-    # Validate inputs
-    if (!is.vector(bamfiles) || length(bamfiles) == 0) {
-        stop("Please provide a named vector of BAM file paths.")
-    }
-    if (!gene_name %in% gtf$gene_name) {
-        stop(paste0("Gene name '", gene_name, "' not found in GTF annotation."))
-    }
-    if (length(transcript_names) == 0) {
-        stop("Please provide a vector of transcript names.")
-    }
-    if (!all(file.exists(bamfiles))) {
-        missing_bams <- bamfiles[!file.exists(bamfiles)]
-        stop(paste("The following BAM files were not found:", paste(missing_bams, collapse = ", ")))
-    }
+  # resume input args...
+  inputs_in <- list(
+    "BAM file:" = bamfiles,
+    "Gene:" = gene_in,
+    "Transcripts:" = features,
+    "Genome annotation org:" = genome_sp
+  )
+  print(inputs_in)
+  options(ucscChromosomeNames = FALSE)
 
-    # Subset the GTF annotation to get the gene and transcripts of interest
-    message('Subsetting the GTF annotation... (1/4)')
-    gene_gtf <- gtf[gtf$gene_name == gene_name &
-                        gtf$type %in% c('UTR', 'CDS', 'exon') &
-                        gtf$transcript_name %in% transcript_names]
+  # 0. set axis track
+  axisTrack <- Gviz::GenomeAxisTrack(genome = genome_sp, name = gene_in, cex = 1, col = "black")
 
-    # Modify annotations for easier plotting
-    gene_gtf$transcript <- paste(gene_gtf$gene_name, gene_gtf$transcript_name, sep = " - ")
-    gene_gtf$gene <- gene_gtf$gene_id
-    gene_gtf$feature <- stringr::str_replace(gene_gtf$type, 'UTR', 'utr')
+  # 1. Set Gene Tracks
+  message("Building Gene Track...")
+  gene.tab <- data.frame(genome_gr[genome_gr$gene_name == gene_in]) %>%
+    tibble::tibble() %>%
+    dplyr::filter(type %in% c("UTR", "CDS", "exon")) %>%
+    dplyr::distinct(seqnames, start, end, width, strand, gene_id, exon_id, transcript_id, gene_name, transcript_name, type) %>%
+    dplyr::rename(Chromosome = "seqnames", feature = "type", gene = "gene_id", transcript = "transcript_id") %>%
+    dplyr::group_by(transcript_name) %>%
+    dplyr::mutate(check = dplyr::if_else(any(feature == "UTR"), "wUTR", "noUTR")) %>%
+    dplyr::filter(!(feature == "exon" & check == "wUTR")) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(feature = dplyr::if_else(feature == "UTR", "utr", feature), transcript = transcript_name) %>%
+    dplyr::mutate_if(is.factor, as.character) %>%
+    dplyr::arrange(transcript_name, start)
 
-    # Check for UTR presence and modify exon handling
-    gene_gtf$check <- lapply(GenomicRanges::split(gene_gtf, gene_gtf$transcript), function(x) {
-        if ('UTR' %in% x$type) return(TRUE) else return(FALSE)
-    }) %>% unlist()
+  if (!is.null(features)) {
+    gene.tab <- dplyr::filter(gene.tab, transcript_name %in% features)
+  }
 
-    # Remove redundant exons in transcripts with UTR
-    gene_gtf <- gene_gtf[!(gene_gtf$type == "exon" & gene_gtf$check == TRUE)]
+  jgroup <- NULL
+  if (gene.tab$strand[1] == "-") {
+    jgroup <- "left"
+  } else {
+    jgroup <- "right"
+  }
+  gene.track <- Gviz::GeneRegionTrack(GenomicRanges::makeGRangesFromDataFrame(gene.tab, keep.extra.columns = T),
+    chromosome = gene.tab$Chromosome[1], name = gene_in, transcriptAnnotation = "transcript",
+    thinBoxFeature = c("utr", "exon"), just.group = jgroup, genome = genome_sp, fontcolor.group = "black",
+    fill = "#38B6A3", color = "black", col.title = "black", col.line = "black",
+    lwd = 3, cex.title = 2, fontsize.group = 25, background.title = "cornflowerblue", size = 0.3
+  )
 
-    if (length(gene_gtf) == 0) {
-        stop(paste0("No matching transcripts found for the gene '", gene_name, "'."))
-    }
+  # 2. set Data track
+  message("Building Alignment Track...")
+  res <- lapply(1:length(bamfiles), function(x) {
+    # get coverage
+    data.table::fwrite(dplyr::distinct(gene.tab, Chromosome, start, end), file = "./coords.txt", col.names = F, sep = "\t")
+    system(paste0(samtools.bin, " view -b --region-file ./coords.txt ", bamfiles[x], " > current.bam"))
+    cov.exp <- system(paste0(samtools.bin, " depth -b coords.txt current.bam > current.cov"))
+    cov.tab <- data.table::fread("current.cov", col.names = c("seqnames", "start", "depth")) %>% dplyr::filter(depth >= 0)
+    # dataTrack
+    curr.track <- Gviz::DataTrack(
+      start = cov.tab$start, width = 1,
+      data = cov.tab$depth, chromosome = gene.tab$Chromosome[1], genome = genome_sp,
+      cex.title = 2, cex = 4, cex.axis = .9, col.line = "black",
+      type = c("hist"), background.title = "gray20", name = names(bamfiles)[x], col.histogram = "#ede32b"
+    )
+    return(list(max.depth = max(cov.tab$depth), track = curr.track))
+  })
+  data.track <- lapply(res, function(x) x[[2]])
+  YMAX <- max(unlist(lapply(res, function(x) x[[1]])))
+  system("rm current.cov")
+  system("rm current.bam")
 
-    # Define the genomic region for plotting
-    plot_region <- range(gene_gtf)
-
-    # Handle zooming logic
-    if (zoom) {
-        dist_zoom <- round(GenomicRanges::width(plot_region) * zoom_focus)  # Default zoom to 10% of the region size
-    }
-
-    # Create the GeneRegionTrack for plotting
-    message('Creating the Gene Region Track... (2/4)')
-    chromosome_in <- as.character(GenomicRanges::seqnames(gene_gtf))[1]
-    strand_in <- as.character(GenomicRanges::strand(gene_gtf))[1]
-    gene_name.pos <- ifelse(strand_in == "-", 'left', 'right')
-
-    gene_track <- Gviz::GeneRegionTrack(gene_gtf, genome = genome,
-                                        chromosome = chromosome_in,
-                                        name = gene_name,
-                                        transcriptAnnotation = "transcript",
-                                        fill = "orange", col = "black",
-                                        background.title = "black",
-                                        fontsize.group = 20,
-                                        just.group = 'below')
-
-    # Create alignment tracks for each BAM file
-    message('Creating alignment tracks for BAM files... (3/4)')
-    cov_tracks <- lapply(names(bamfiles), function(bam) {
-        Gviz::AlignmentsTrack(bamfiles[[bam]], genome = genome,
-                              isPaired = TRUE, name = bam,
-                              chromosome = chromosome_in,
-                              type = c("coverage"),
-                              col = "black", fill = "blue",
-                              background.title = "coral4")
-    })
-
-    # Plot the gene and coverage tracks
-    message('Plotting the gene and coverage tracks... (4/4)')
-    if (strand_in == "+") {
-        if (!zoom) {
-            Gviz::plotTracks(
-                c(gene_track, cov_tracks),
-                sizes = c(1/3, rep(2/3 / length(cov_tracks), length(cov_tracks))),
-                from = GenomicRanges::start(plot_region),
-                to = GenomicRanges::end(plot_region) + extend.range,
-                transcriptAnnotation = "transcript",
-                main = paste("Coverage Plot for", gene_name)
-            )
-        } else {
-            Gviz::plotTracks(
-                c(gene_track, cov_tracks),
-                sizes = c(1/3, rep(2/3 / length(cov_tracks), length(cov_tracks))),
-                from = GenomicRanges::end(plot_region) - dist_zoom,
-                to = GenomicRanges::end(plot_region) + extend.range,
-                transcriptAnnotation = "transcript",
-                main = paste("Coverage Plot for", gene_name)
-            )
-        }
+  # Plot
+  if (gene.tab$strand[1] == "+") {
+    if (is.null(distZOOM)) {
+      Gviz::plotTracks(c(axisTrack, gene.track, data.track),
+        from = min(gene.tab$start), to = max(gene.tab$end) + extend.right,
+        sizes = c(0.1, 1 / 3, rep(1 / 4, length(bamfiles))),
+        ylim = c(0, YMAX),
+        fig.width = 20, fig.height = 5
+      )
     } else {
-        if (!zoom) {
-            Gviz::plotTracks(
-                c(gene_track, cov_tracks),
-                sizes = c(1/3, rep(2/3 / length(cov_tracks), length(cov_tracks))),
-                from = GenomicRanges::start(plot_region) - extend.range,
-                to = GenomicRanges::end(plot_region),
-                transcriptAnnotation = "transcript",
-                main = paste("Coverage Plot for", gene_name)
-            )
-        } else {
-            Gviz::plotTracks(
-                c(gene_track, cov_tracks),
-                sizes = c(1/3, rep(2/3 / length(cov_tracks), length(cov_tracks))),
-                from = GenomicRanges::start(plot_region) - extend.range,
-                to = GenomicRanges::start(plot_region) + dist_zoom,
-                transcriptAnnotation = "transcript",
-                main = paste("Coverage Plot for", gene_name)
-            )
-        }
+      Gviz::plotTracks(c(axisTrack, gene.track, data.track),
+        from = max(gene.tab$end) - distZOOM, to = max(gene.tab$end) + extend.right,
+        sizes = c(0.1, 1 / 3, rep(1 / 4, length(bamfiles))),
+        ylim = c(0, YMAX),
+        fig.width = 20, fig.height = 5
+      )
     }
+  } else {
+    if (is.null(distZOOM)) {
+      Gviz::plotTracks(c(axisTrack, gene.track, data.track),
+        from = min(gene.tab$start) - extend.left, to = max(gene.tab$end),
+        sizes = c(0.1, 1 / 3, rep(1 / 4, length(bamfiles))),
+        ylim = c(0, YMAX),
+        fig.width = 20, fig.height = 5
+      )
+    } else {
+      Gviz::plotTracks(c(axisTrack, gene.track, data.track),
+        from = min(gene.tab$start) - extend.left, to = min(gene.tab$start) + distZOOM,
+        sizes = c(0.1, 1 / 3, rep(1 / 4, length(bamfiles))),
+        ylim = c(0, YMAX),
+        fig.width = 20, fig.height = 5
+      )
+    }
+  }
 }
