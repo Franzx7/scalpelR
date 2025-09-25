@@ -1,46 +1,45 @@
 \name{FindIsoforms}
-\alias{FindIsoforms}
-\title{Identify Isoform Expression with Differential Expression Across Conditions}
+\title{Identify Differentially Expressed Isoforms Across Conditions}
 \description{
-  The \code{FindIsoforms} function identifies isoform expression with differential expression across specified conditions in single-cell RNA-seq data.
+Identifies isoform expression with differential expression across specified conditions in single-cell RNA-seq data using a Seurat object.
 }
 \usage{
-FindIsoforms(seurat_obj, group.by = "orig.ident", split.by = NULL, assay = "RNA",
-  threshold_pval = 0.05, threshold_abund = 0.10, min.cells.fract = 0.10)
+FindIsoforms(
+  seurat_obj,
+  group_by,
+  split_by = NULL,
+  assay = "RNA",
+  threshold_pval = 0.05,
+  threshold_abund = 0.1,
+  threshold_sd = 0.05
+)
 }
 \arguments{
-  \item{seurat_obj}{The input Seurat object containing single-cell RNA-seq data.}
-  \item{group.by}{The condition to compare isoforms (default: "orig.ident").}
-  \item{split.by}{Optional parameter to split the analysis by an additional condition.}
-  \item{assay}{The Seurat assay to use (default: "RNA").}
-  \item{threshold_pval}{Adjusted P-value threshold for significance (default: 0.05).}
-  \item{threshold_abund}{Minimum isoform abundance percentage (default: 0.10).}
-  \item{min.cells.fract}{Minimum fraction of cells expressing isoforms (default: 0.10).}
+  \item{seurat_obj}{The input Seurat object containing scRNA-seq data.}
+  \item{group_by}{The metadata variable used to group cells for isoform expression comparison.}
+  \item{split_by}{Optional. Metadata variable used to split the Seurat object before analysis. If \code{NULL}, no split is performed. Default is \code{NULL}.}
+  \item{assay}{Character. The Seurat assay to use for analysis. Default is \code{"RNA"}.}
+  \item{threshold_pval}{Numeric. Adjusted p-value threshold for significance. Default is \code{0.05}.}
+  \item{threshold_abund}{Numeric. Minimum isoform abundance proportion per group. Default is \code{0.1}.}
+  \item{threshold_sd}{Numeric. Minimum standard deviation of counts across groups for an isoform to be tested. Default is \code{0.05}.}
 }
 \details{
-  This function performs differential expression analysis of isoforms across specified conditions within the input Seurat object. It includes checks for the validity of the input parameters, calculates isoform expression fractions, and performs a Chi-squared test to identify significant isoforms.
+The function aggregates isoform (transcript) expression per group, filters isoforms based on abundance and variability, and applies a chi-squared test to assess differential isoform usage. Adjusted p-values (Benjamini-Hochberg) are reported. If \code{split_by} is specified and different from \code{group_by}, the analysis is performed separately for each split.
 }
 \value{
-  A data frame with identified isoforms, including P-values and adjusted P-values for significant isoforms.
+A data.frame (or data.table) containing isoforms passing the significance threshold, with statistics for differential expression. If splitting, results from each split are combined.
 }
 \examples{
 \dontrun{
-# Example usage of FindIsoforms
-result <- FindIsoforms(seurat_obj = my_seurat_obj,
-                       group.by = "Cluster",
-                       split.by = "Treatment",
-                       assay = "RNA",
-                       threshold_pval = 0.05,
-                       threshold_abund = 0.10,
-                       min.cells.fract = 0.10)
+FindIsoforms(
+  seurat_obj = my_seurat,
+  group_by = "condition",
+  split_by = NULL,
+  assay = "RNA",
+  threshold_pval = 0.05,
+  threshold_abund = 0.1,
+  threshold_sd = 0.05
+)
 }
 }
-\seealso{
-  \code{\link[Seurat]{Seurat}}, \code{\link[stats]{chisq.test}}
-}
-\author{
-  Franz, University of Barcelona, Bioinformatics Researcher
-}
-\keyword{isoform}
-\keyword{differential expression}
-\keyword{single-cell RNA-seq}
+\author{}
