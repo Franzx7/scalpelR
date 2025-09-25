@@ -3,6 +3,6 @@ export(CoveragePlot)
 export(FindIsoforms)
 export(plotExpression)
 export(subsetBAM)
-export(weightedUTR_cell.R)
+export(weightedUTR_cell)
 
 importFrom(magrittr, "%>%")
