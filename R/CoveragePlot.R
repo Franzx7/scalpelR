@@ -43,7 +43,6 @@ CoveragePlot <- function(
     features = NULL,
     genome_sp = "mm10",
     distZOOM = NULL,
-    filter_trs = F,
     extend.left = 1000,
     extend.right = 1000,
     samtools.bin = "samtools") {
