@@ -34,7 +34,9 @@ plotExpression <- function(
     group_var,
     plot = "group",
     assay = "RNA",
-    log_normalization = TRUE) {
+    layer = "counts",
+    log_normalization = TRUE,
+    only_expressed_cells = FALSE) {
   # Function to plot with geom_boxplot relative isoform expression
 
   if (!plot %in% c("group", "features")) {
@@ -45,45 +47,58 @@ plotExpression <- function(
   meta.infos <- data.table::data.table(group = seurat_obj@meta.data[, group_var], cells = colnames(seurat_obj))
 
   # compute counts tab
-  tab <- seurat_obj[[assay]]$counts[features, ] %>%
+  tab <- seurat_obj[[assay]][layer][features, ] %>%
     as_tibble(rownames = "features") %>%
     reshape2::melt(variable.name = "cells") %>%
     dplyr::left_join(meta.infos, by = "cells") %>%
-    dplyr::mutate(value.logNorm = log1p(value))
+    dplyr::mutate(value.logNorm = log1p(value)) %>%
+    dplyr::ungroup()
 
+  # discard all the cells not expressed cells if required
+  if (only_expressed_cells) {
+    tab <- dplyr::filter(tab, value != 0)
+  }
 
   # plot
-  p1 <- ggplot2::ggplot(tab, ggplot2::aes(group, value, fill = features)) +
+  p1 <- ggplot2::ggplot(tab, ggplot2::aes(group, value, fill = features, color = features)) +
     ggplot2::xlab(group_var) +
     ggplot2::ylab("counts") +
-    ggplot2::geom_boxplot(width = .2, size = 1) +
+    ggplot2::geom_violin(width = .2, trim = T, scale = "width", position = ggplot2::position_dodge(width = 0.3), alpha = .6) +
+    ggplot2::geom_jitter(position = ggplot2::position_dodge(width = 0.3), alpha = .5) +
+    ggplot2::geom_boxplot(position = ggplot2::position_dodge(width = 0.3), width = .05, color = "black", outlier.shape = NA, size = .2, outlier.size = .2) +
     ggplot2::ggtitle(paste0("Features expression in ", group_var)) +
     ggplot2::theme_bw(base_size = 15) +
-    ggplot2::theme(legend.position = "top", axis.text = ggplot2::element_text(size = 17))
+    ggplot2::theme(legend.position = "top", axis.text = ggplot2::element_text(size = 17, face = "bold"))
 
-  p2 <- ggplot2::ggplot(tab, ggplot2::aes(group, value.logNorm, fill = features)) +
+  p2 <- ggplot2::ggplot(tab, ggplot2::aes(group, value.logNorm, fill = features, color = features)) +
     ggplot2::xlab(group_var) +
     ggplot2::ylab("counts") +
-    ggplot2::geom_boxplot(width = .2, size = 1) +
+    ggplot2::geom_violin(width = .2, trim = T, scale = "width", position = ggplot2::position_dodge(width = 0.3), alpha = .7, color = "black", size = .2) +
+    ggplot2::geom_jitter(position = ggplot2::position_dodge(width = 0.3), alpha = .5) +
+    ggplot2::geom_boxplot(position = ggplot2::position_dodge(width = 0.3), width = .05, color = "black", outlier.shape = NA, size = .2, outlier.size = .2) +
     ggplot2::ggtitle(paste0("Features expression in ", group_var)) +
     ggplot2::theme_bw(base_size = 15) +
-    ggplot2::theme(legend.position = "top", axis.text = ggplot2::element_text(size = 17))
+    ggplot2::theme(legend.position = "top", axis.text = ggplot2::element_text(size = 17, face = "bold"))
 
-  p3 <- ggplot2::ggplot(tab, ggplot2::aes(features, value, fill = group)) +
+  p3 <- ggplot2::ggplot(tab, ggplot2::aes(features, value, fill = group, color = group)) +
     ggplot2::xlab(group_var) +
     ggplot2::ylab("counts") +
-    ggplot2::geom_boxplot(width = .2, size = 1) +
+    ggplot2::geom_violin(width = .2, trim = T, scale = "width", position = ggplot2::position_dodge(width = 0.3), alpha = .7, color = "black", size = .2) +
+    ggplot2::geom_jitter(position = ggplot2::position_dodge(width = 0.3), alpha = .5) +
+    ggplot2::geom_boxplot(position = ggplot2::position_dodge(width = 0.3), width = .05, color = "black", outlier.shape = NA, size = .2, outlier.size = .2) +
     ggplot2::ggtitle(paste0("Features expression in ", group_var)) +
     ggplot2::theme_bw(base_size = 15) +
-    ggplot2::theme(legend.position = "top", axis.text = ggplot2::element_text(size = 17))
+    ggplot2::theme(legend.position = "top", axis.text = ggplot2::element_text(size = 17, face = "bold"))
 
-  p4 <- ggplot2::ggplot(tab, ggplot2::aes(features, value.logNorm, fill = group)) +
+  p4 <- ggplot2::ggplot(tab, ggplot2::aes(features, value.logNorm, fill = group, color = group)) +
     ggplot2::xlab(group_var) +
     ggplot2::ylab("counts") +
-    ggplot2::geom_boxplot(width = .2, size = 1) +
+    ggplot2::geom_violin(width = .2, trim = T, scale = "width", position = ggplot2::position_dodge(width = 0.3), alpha = .7, color = "black", size = .2) +
+    ggplot2::geom_jitter(position = ggplot2::position_dodge(width = 0.3), alpha = .5) +
+    ggplot2::geom_boxplot(position = ggplot2::position_dodge(width = 0.3), width = .05, color = "black", outlier.shape = NA, size = .2, outlier.size = .2) +
     ggplot2::ggtitle(paste0("Features expression in ", group_var)) +
     ggplot2::theme_bw(base_size = 15) +
-    ggplot2::theme(legend.position = "top", axis.text = ggplot2::element_text(size = 17))
+    ggplot2::theme(legend.position = "top", axis.text = ggplot2::element_text(size = 17, face = "bold"))
 
   # return
   if (log_normalization & plot == "group") {
