@@ -4,9 +4,9 @@
 #' It requires a gene annotation file with UTR and CDS information to calculate UTR lengths across isoforms.
 #'
 #' @param seurat_obj A Seurat object containing single-cell RNA-seq data.
-#' @param features A vector of features (genes/transcripts) to subset the Seurat object by. Default is NULL.
 #' @param annotation_gr A GRanges object containing gene annotation, including UTR and CDS regions.
 #' @param group.by The metadata column in the Seurat object to group cells by.
+#' @param features A vector of features (genes/transcripts) to subset the Seurat object by. Default is NULL.
 #' @param assay The assay to use for expression values, default is "RNA".
 #' @param min.counts The minimum number of counts required to consider a transcript for further analysis. Default is 3.
 #'
@@ -22,9 +22,9 @@
 #' @export
 weightedUTR_cell <- function(
         seurat_obj,
-        features = NULL,
         annotation_gr,
-        group.by = NULL,
+        group.by,
+        features = NULL,
         assay = "RNA",
         min.counts = 3) {
     # Checks

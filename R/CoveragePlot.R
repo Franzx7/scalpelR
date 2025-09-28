@@ -6,6 +6,7 @@
 #' @param bamfiles A named vector of BAM file paths. Names will be used as track labels.
 #' @param gene_in The gene name of interest (must be present in \code{genome_gr}).
 #' @param features Optional. A vector of transcript names to be displayed for the gene (\code{NULL} for all transcripts).
+#' @param sizes Optional. A numeric vector specifying the number of cells in each BAM file (for normalization purposes).
 #' @param genome_sp The genome build identifier, either \code{"mm10"} or \code{"hg38"}. Default is \code{"mm10"}.
 #' @param distZOOM Optional. Zoom to a subregion (numeric, in bp) from gene boundary. If \code{NULL}, plot the entire gene region.
 #' @param annot_tab Optional. Annotation table. Not used internally but reserved for future use.
@@ -27,6 +28,7 @@
 #' CoveragePlot(
 #'   genome_gr = gtf_gr,
 #'   bamfiles = c(Sample1 = "sample1.bam", Sample2 = "sample2.bam"),
+#'   sizes = c('Sample1' = 500, 'Sample2' = 600),
 #'   gene_in = "GeneA",
 #'   features = c("Transcript1", "Transcript2"),
 #'   genome_sp = "mm10",
@@ -41,6 +43,7 @@ CoveragePlot <- function(
     bamfiles,
     gene_in,
     features = NULL,
+    sizes = NULL,
     genome_sp = "mm10",
     distZOOM = NULL,
     extend.left = 1000,
@@ -106,6 +109,7 @@ CoveragePlot <- function(
     system(paste0(samtools.bin, " view -b --region-file ./coords.txt ", bamfiles[x], " > current.bam"))
     cov.exp <- system(paste0(samtools.bin, " depth -b coords.txt current.bam > current.cov"))
     cov.tab <- data.table::fread("current.cov", col.names = c("seqnames", "start", "depth")) %>% dplyr::filter(depth >= 0)
+    cov.tab$depth = (cov.tab$depth / sizes[x]) * 1000
     # dataTrack
     curr.track <- Gviz::DataTrack(
       start = cov.tab$start, width = 1,
