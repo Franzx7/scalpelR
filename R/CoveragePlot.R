@@ -109,7 +109,7 @@ CoveragePlot <- function(
     system(paste0(samtools.bin, " view -b --region-file ./coords.txt ", bamfiles[x], " > current.bam"))
     cov.exp <- system(paste0(samtools.bin, " depth -b coords.txt current.bam > current.cov"))
     cov.tab <- data.table::fread("current.cov", col.names = c("seqnames", "start", "depth")) %>% dplyr::filter(depth >= 0)
-    cov.tab$depth = (cov.tab$depth / sizes[x]) * 1000
+    if(!is.null(sizes)){cov.tab$depth = (cov.tab$depth / sizes[x]) * 1000}
     # dataTrack
     curr.track <- Gviz::DataTrack(
       start = cov.tab$start, width = 1,
